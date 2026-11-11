@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nf-core/rnaseq in 3D</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0c1422">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a 3D map of ten stations on the left, a lab-notebook panel on the right.
+   One visual world (deep-water navy), single theme by choice. */
+:root{
+  color-scheme: dark;
+  --ink:#0c1422;        /* scene background */
+  --panel:#121c2e;      /* notebook panel */
+  --raise:#1a2640;      /* chips, code blocks */
+  --line:#2a3854;
+  --text:#e7edf6;
+  --muted:#98a6bd;
+  --pipe:#62d2c3;       /* pipeline stations 1-6 */
+  --analysis:#b9a0ff;   /* analysis stations 7-10 */
+  --g-arv:#ff7d6b;      /* Asthma + RV */
+  --g-crv:#f3bd4f;      /* Control + RV */
+  --g-cveh:#5fa8ff;     /* Control + vehicle */
+  --display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--ink);color:var(--text);font:15px/1.55 var(--body);
+  display:grid;grid-template-columns:minmax(0,1fr) 430px;overflow:hidden}
+#stage{position:relative;min-width:0;min-height:0}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#cv.drag{cursor:grabbing}
+.hud{position:absolute;left:16px;right:16px;display:flex;gap:10px 18px;flex-wrap:wrap;align-items:center;
+  font-size:12.5px;color:var(--muted);pointer-events:none}
+.hud.top{top:14px;justify-content:space-between}
+.hud.bot{bottom:14px}
+.brand{font:600 17px/1.2 var(--display);letter-spacing:.02em;color:var(--text)}
+.brand small{font:400 12.5px var(--body);color:var(--muted);margin-left:8px;letter-spacing:0}
+.key{display:flex;gap:14px;flex-wrap:wrap}
+.key i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.badge{border:1px solid var(--line);border-radius:999px;padding:2px 10px;background:rgba(12,20,34,.7)}
+
+#panel{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.rail{padding:14px 18px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.railrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.raillabel{font:600 11px/1 var(--display);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);width:66px}
+.chip{font:500 13px/1 var(--mono);color:var(--text);background:var(--raise);border:1px solid var(--line);
+  border-radius:6px;min-width:30px;height:28px;padding:0 8px;cursor:pointer}
+.chip:hover{border-color:var(--muted)}
+.chip[aria-current="true"]{color:#0c1422;border-color:transparent}
+.chip.p[aria-current="true"],.chip.m[aria-current="true"]{background:var(--pipe)}
+.chip.a[aria-current="true"]{background:var(--analysis)}
+button:focus-visible,.chip:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+
+#body{flex:1;overflow-y:auto;padding:20px 22px 8px;min-height:0}
+.eyebrow{font:600 11.5px/1 var(--display);letter-spacing:.09em;text-transform:uppercase;margin:0 0 8px}
+.eyebrow.p{color:var(--pipe)} .eyebrow.a{color:var(--analysis)}
+h1{font:600 27px/1.15 var(--display);margin:0 0 10px;text-wrap:balance}
+h2{font:600 12px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:20px 0 6px}
+p{margin:0 0 10px;max-width:62ch}
+ul{margin:0 0 10px;padding-left:18px} li{margin:0 0 5px}
+code{font:400 12.5px/1.5 var(--mono);background:var(--raise);border-radius:4px;padding:1px 5px}
+pre{font:400 12px/1.55 var(--mono);background:var(--raise);border:1px solid var(--line);border-radius:8px;
+  padding:11px 13px;margin:0 0 10px;overflow-x:auto;white-space:pre}
+.io{display:grid;grid-template-columns:44px 1fr;gap:5px 10px;margin:0 0 4px;font-size:13.5px}
+.io dt{color:var(--muted);font:600 11px/1.9 var(--display);letter-spacing:.08em;text-transform:uppercase}
+.io dd{margin:0}
+.note{border-left:3px solid var(--line);padding:2px 0 2px 12px;color:var(--muted);font-size:13.5px}
+.seg{display:flex;gap:6px;margin:4px 0 12px;flex-wrap:wrap}
+.seg button{font:500 13px var(--body);color:var(--text);background:var(--raise);border:1px solid var(--line);
+  border-radius:6px;padding:7px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--analysis);border-color:transparent;color:#0c1422}
+.nav{display:flex;gap:10px;padding:12px 18px 16px;border-top:1px solid var(--line)}
+.nav button{flex:1;font:600 14px var(--body);border-radius:8px;padding:11px 12px;cursor:pointer;
+  border:1px solid var(--line);background:var(--raise);color:var(--text)}
+.nav button#next{background:var(--text);color:#0c1422;border-color:transparent}
+.nav button:disabled{opacity:.4;cursor:default}
+a{color:var(--pipe)}
+@media (max-width:860px){
+  body{grid-template-columns:1fr;grid-template-rows:42% 58%}
+  #panel{border-left:0;border-top:1px solid var(--line)}
+  .brand small,.hud.bot .hint{display:none}
+  .raillabel{width:auto;margin-right:4px}
+  #body{padding:16px 16px 6px}
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv" role="img" aria-label="3D map of the RNA-seq workflow. Each step is described in the panel."></canvas>
+  <div class="hud top">
+    <div class="brand">nf-core/rnaseq in 3D<small>FASTQ to differential expression · Benjamin Garceau</small></div>
+    <span class="badge">Simulated data, for illustration</span>
+  </div>
+  <div class="hud bot">
+    <div class="key">
+      <span><i style="background:var(--g-arv)"></i>Asthma + RV</span>
+      <span><i style="background:var(--g-crv)"></i>Control + RV</span>
+      <span><i style="background:var(--g-cveh)"></i>Control + vehicle</span>
+    </div>
+    <span class="hint">Drag to rotate · scroll to zoom · click a station</span>
+  </div>
+</div>
+<aside id="panel">
+  <nav class="rail" aria-label="Steps">
+    <div class="railrow"><span class="raillabel">Pipeline</span><span id="rail-p" class="railrow"></span></div>
+    <div class="railrow"><span class="raillabel">Analysis</span><span id="rail-a" class="railrow"></span></div>
+  </nav>
+  <div id="body" tabindex="0"></div>
+  <div class="nav">
+    <button id="prev" type="button">Back</button>
+    <button id="next" type="button">Next</button>
+  </div>
+</aside>
+
+<script>
+"use strict";
+/* ---------------------------------------------------------------- content */
+const STEPS = [
+{ k:"m", short:"Map", name:"The whole route", eyebrow:"Start here", html:`
+<p>nf-core/rnaseq takes raw reads and a samplesheet and returns a gene-by-sample count matrix and a quality report. It runs no statistical test between groups. That part is yours.</p>
+<p>The back row of stations (1 to 6) is what the pipeline does. The front row (7 to 10) is the analysis you run afterward in R.</p>
+<h2>One command runs stations 1 to 6</h2>
+<pre>nextflow run nf-core/rnaseq -r 3.27.0 \\
+  -profile singularity \\
+  --input samplesheet.csv \\
+  --outdir results \\
+  --fasta genome.fa \\
+  --gtf genes.gtf \\
+  --aligner star_salmon</pre>
+<p>Nextflow reads the samplesheet, turns every step into cluster jobs, runs each tool in its own container, and caches finished work so <code>-resume</code> picks up where a failed run stopped.</p>
+<h2>Running example</h2>
+<p>Nine bronchial epithelial samples in three groups of three: asthma + rhinovirus, control + rhinovirus, control + vehicle. Every number drawn here is simulated to show the shape of each step.</p>`},
+
+{ k:"p", short:"FASTQ", name:"Samplesheet and FASTQ", eyebrow:"Station 1 · input", html:`
+<p>Each stack is one sample's FASTQ file: millions of short reads, four lines per read (ID, bases, a plus sign, one quality character per base).</p>
+<dl class="io"><dt>In</dt><dd><code>*.fastq.gz</code>, <code>samplesheet.csv</code>, genome FASTA, GTF</dd>
+<dt>Out</dt><dd>one merged FASTQ (or pair) per sample</dd></dl>
+<h2>The samplesheet</h2>
+<pre>sample,fastq_1,fastq_2,strandedness
+ASTHMA_RV_1,SRR…_1.fastq.gz,SRR…_2.fastq.gz,auto
+CONTROL_RV_1,SRR…_1.fastq.gz,SRR…_2.fastq.gz,auto
+CONTROL_VEH_1,SRR…_1.fastq.gz,SRR…_2.fastq.gz,auto</pre>
+<ul><li>Rows that share a <code>sample</code> name are treated as re-sequenced lanes and concatenated.</li>
+<li>Leave <code>fastq_2</code> empty for single-end data.</li>
+<li>Put the group in the sample name. It becomes your column metadata later.</li></ul>`},
+
+{ k:"p", short:"Read QC", name:"Strandedness and read QC", eyebrow:"Station 2 · look before you cut", html:`
+<p>The bars are mean base quality at each position in the read. Quality usually sags toward the 3′ end, as it does here.</p>
+<dl class="io"><dt>Tools</dt><dd><code>fq</code> + Salmon (strandedness), FastQC</dd>
+<dt>Out</dt><dd><code>fastqc/*.html</code>, inferred strandedness</dd></dl>
+<p>With <code>strandedness</code> set to <code>auto</code>, the pipeline subsamples each file, pseudoaligns the subsample with Salmon, and works out whether the library is forward, reverse or unstranded. Counting later depends on this.</p>
+<h2>What to check</h2>
+<ul><li>Green is Phred 28 or above. A red tail gets trimmed at the next station.</li>
+<li>Adapter content rising along the read means short inserts.</li>
+<li>A GC curve with two humps suggests contamination or heavy rRNA.</li></ul>`},
+
+{ k:"p", short:"Trim", name:"Trim and filter", eyebrow:"Station 3 · clean the reads", html:`
+<p>Red ends are adapter sequence. Trim Galore! clips them off along with low-quality tails, and drops reads that end up too short.</p>
+<dl class="io"><dt>Tools</dt><dd>Trim Galore! (default) or <code>--trimmer fastp</code></dd>
+<dt>Out</dt><dd>trimmed FASTQ, trimming reports</dd></dl>
+<h2>Optional filters</h2>
+<ul><li><code>--with_umi</code> pulls molecular barcodes out of reads with UMI-tools.</li>
+<li>BBSplit removes reads from a contaminating genome when you supply one.</li>
+<li><code>--remove_ribo_rna</code> filters ribosomal RNA with SortMeRNA.</li></ul>
+<h2>What to check</h2>
+<p>The share of bases removed. A few percent is routine. A large loss in one sample is worth a look before you trust its counts.</p>`},
+
+{ k:"p", short:"Align", name:"Align to the genome", eyebrow:"Station 4 · where did each read come from", html:`
+<p>The grey bar is a stretch of genome and the raised blocks are exons. STAR places each read on it. Reads that span an exon junction are split in two, with the gap bridging the intron (yellow arcs).</p>
+<dl class="io"><dt>Tools</dt><dd>STAR, SAMtools, Picard MarkDuplicates</dd>
+<dt>Out</dt><dd>sorted, indexed <code>.bam</code>; bigWig coverage tracks</dd></dl>
+<p>The pipeline builds the STAR index from your FASTA and GTF on the first run. Save it with <code>--save_reference</code> and later runs skip that step.</p>
+<p>Duplicates are marked, not removed. In RNA-seq, highly expressed genes produce genuine duplicate reads.</p>
+<h2>What to check</h2>
+<p>The uniquely mapped rate per sample in the STAR section of the report, and that all samples look alike.</p>`},
+
+{ k:"p", short:"Quantify", name:"Count reads per gene", eyebrow:"Station 5 · reads become numbers", html:`
+<p>Each bar is one gene in one sample. Samples run left to right, genes front to back. This grid is the count matrix.</p>
+<dl class="io"><dt>Tools</dt><dd>Salmon on STAR's transcriptome alignments, then tximport</dd>
+<dt>Out</dt><dd><code>star_salmon/salmon.merged.gene_counts.tsv</code>, <code>…gene_tpm.tsv</code></dd></dl>
+<p>Salmon assigns each read to a transcript and splits ambiguous reads between candidates by probability. tximport then sums transcripts into genes.</p>
+<h2>Other routes</h2>
+<ul><li><code>--aligner star_rsem</code> quantifies with RSEM.</li>
+<li><code>--aligner hisat2</code> aligns only. It produces no counts.</li>
+<li><code>--pseudo_aligner salmon</code> with <code>--skip_alignment</code> skips the genome and is much faster.</li></ul>
+<p class="note">Bars of the same colour differ in height partly because some samples were sequenced deeper. Station 7 fixes that.</p>`},
+
+{ k:"p", short:"Report", name:"Quality report", eyebrow:"Station 6 · the pipeline's last word", html:`
+<p>One column per sample: uniquely mapped reads in colour, multi-mapped in grey, unmapped in dark. MultiQC gathers every tool's output into a single page like this.</p>
+<dl class="io"><dt>Tools</dt><dd>RSeQC, Qualimap, dupRadar, Preseq, DESeq2 (QC plots), MultiQC</dd>
+<dt>Out</dt><dd><code>multiqc/star_salmon/multiqc_report.html</code></dd></dl>
+<h2>What to check</h2>
+<ul><li>Mapping rate and assigned-read share are similar across samples.</li>
+<li>The strandedness check passes for every sample.</li>
+<li>Gene body coverage is even. A 3′ skew points to degraded RNA.</li>
+<li>The built-in PCA and sample-distance heatmap group replicates together.</li></ul>
+<p class="note">The ringed column is simulated with a low mapping rate to show what an outlier looks like. A sample like that deserves a decision before the analysis: investigate, re-run, or drop it and say so.</p>
+<p>The pipeline ends here. Nothing so far has compared one group with another.</p>`},
+
+{ k:"a", short:"Normalize", name:"Normalize the counts", eyebrow:"Station 7 · make samples comparable", html:`
+<p>Same grid as station 5. Raw counts scale with how deeply each sample was sequenced, so bars within a group are uneven for reasons unrelated to biology.</p>
+<div class="seg" role="group" aria-label="Count scale">
+  <button type="button" data-act="norm0" aria-pressed="true">Raw counts</button>
+  <button type="button" data-act="norm1" aria-pressed="false">Divide by size factors</button>
+</div>
+<p>DESeq2 estimates one size factor per sample (median of ratios) and divides it out. After that, most genes sit level across all nine samples and the few that still differ by group stand out.</p>
+<pre>library(DESeq2)
+counts  <- read.delim("salmon.merged.gene_counts.tsv",
+                      row.names = 1)[, -1]
+coldata <- data.frame(group = factor(rep(
+  c("Asthma_RV","Control_RV","Control_VEH"), each = 3)))
+dds <- DESeqDataSetFromMatrix(round(counts), coldata, ~ group)
+dds <- dds[rowSums(counts(dds) >= 10) >= 3, ]
+vsd <- vst(dds)   # for plots only</pre>
+<p class="note">Test on raw counts and let DESeq2 normalize. TPM and VST values are for plotting. Salmon counts are fractional, hence <code>round()</code>; importing with tximport is the more exact route.</p>`},
+
+{ k:"a", short:"PCA", name:"PCA: do samples group?", eyebrow:"Station 8 · the first real look", html:`
+<p>Each sphere is a sample, placed by its whole expression profile squeezed onto three axes. Rotate it. PC3 is only visible in 3D.</p>
+<pre>plotPCA(vsd, intgroup = "group")</pre>
+<h2>How to read it</h2>
+<ul><li>Replicates of a group should sit together.</li>
+<li>PC1 is the largest source of variation. Here it separates virus from vehicle.</li>
+<li>PC2 here separates asthma from control among infected samples.</li>
+<li>A sample sitting inside the wrong group suggests a label swap. Groups splitting by donor or run date suggest a batch effect to add to the design.</li></ul>
+<p class="note">If the biggest axis in your real data is something other than your experimental factor, find out what it is before testing.</p>`},
+
+{ k:"a", short:"DE test", name:"Test each gene", eyebrow:"Station 9 · differential expression", html:`
+<p>Each dot is a gene. Left to right is log2 fold change, height is statistical confidence, depth is average expression. One cloud, two classic plots:</p>
+<div class="seg" role="group" aria-label="Camera">
+  <button type="button" data-act="volcano">Volcano view</button>
+  <button type="button" data-act="ma">MA view</button>
+</div>
+<pre>dds <- DESeq(dds)
+res <- results(dds, alpha = 0.05,
+  contrast = c("group","Control_RV","Control_VEH"))
+res <- lfcShrink(dds, res = res, type = "ashr",
+  contrast = c("group","Control_RV","Control_VEH"))</pre>
+<ul><li>Pink is up, blue is down, at adjusted p below 0.05 and at least a twofold change. The faint walls mark the twofold cut-offs.</li>
+<li>Low-expression genes (near side in MA view) swing widely in fold change without reaching significance. Shrinkage tames them.</li></ul>
+<h2>Which comparisons this design supports</h2>
+<ul><li><b>Control RV vs control vehicle</b>: the effect of infection.</li>
+<li><b>Asthma RV vs control RV</b>: the effect of asthma during infection.</li></ul>
+<p class="note">With no asthma + vehicle group you cannot estimate the interaction, so you cannot say whether asthma changes the response to virus as opposed to baseline expression.</p>`},
+
+{ k:"a", short:"Heatmap", name:"Heatmap and meaning", eyebrow:"Station 10 · from a gene list to a result", html:`
+<p>Rows are top genes, columns are samples, colour and height are z-scores of VST expression: red above the gene's mean, blue below.</p>
+<pre>top <- head(order(res$padj), 30)
+m   <- assay(vsd)[top, ]
+pheatmap::pheatmap(m, scale = "row",
+  annotation_col = coldata)</pre>
+<h2>Then ask what the genes have in common</h2>
+<ul><li>Over-representation or GSEA against GO and Reactome (<code>clusterProfiler</code>, <code>fgsea</code>).</li>
+<li>Compare with the original paper: overlap of significant genes, and whether fold changes point the same way.</li></ul>
+<p class="note">The top rows carry names of interferon-stimulated genes, the kind virus infection typically switches on. The values and the lettered genes are invented.</p>
+<p>To run this whole analysis stage as a pipeline too, feed the count matrix to <a href="https://nf-co.re/differentialabundance">nf-core/differentialabundance</a>.</p>`}
+];
+
+/* ------------------------------------------------------------ small utils */
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const R=rng(7);
+const gauss=()=>{let u=0,v=0;while(!u)u=R();v=R();return Math.sqrt(-2*Math.log(u))*Math.cos(6.2832*v)};
+const hex=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+const css=(c,k)=>`rgb(${c[0]*k|0},${c[1]*k|0},${c[2]*k|0})`;
+const mix=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const ease=x=>x*x*(3-2*x);
+const C={ink:"#0c1422",pipe:"#62d2c3",ana:"#b9a0ff",text:"#e7edf6",muted:"#98a6bd",
+  g:["#ff7d6b","#f3bd4f","#5fa8ff"],plat:"#1b2942",platA:"#221f45",grey:"#8a97ad",dark:"#3a4760",
+  ok:"#5bd08c",warn:"#f3bd4f",bad:"#f0625a",up:"#ff6fa8",down:"#6f9bff",ns:"#56637c"};
+const GROUP=s=>s<3?0:s<6?1:2;
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ------------------------------------------------------------ scene data */
+const POS=[[0,-15],[22,-15],[44,-15],[66,-15],[88,-15],[110,-15],[93,15],[66,15],[39,15],[12,15]];
+const items=[];           // every drawable
+const anim=[];            // per-frame updaters
+let normGoal=0,normMix=0;
+
+function station(i){
+  const ox=POS[i][0],oz=POS[i][1];
+  const o={
+    box(x,y,z,w,h,d,col,a){const c=hex(col);const b={t:"box",st:i,c:[ox+x,y+h/2,oz+z],s:[w,h,d],a:a==null?1:a};
+      o.paint(b,c);items.push(b);return b},
+    paint(b,c){b.col=[css(c,1),css(c,.74),css(c,.56)]},
+    line(a,b,col,w,al){const l={t:"ln",st:i,a:[ox+a[0],a[1],oz+a[2]],b:[ox+b[0],b[1],oz+b[2]],css:col,w:w||1,al:al==null?1:al};items.push(l);return l},
+    text(x,y,z,s,opt){const q=Object.assign({t:"txt",st:i,c:[ox+x,y,oz+z],s,px:12,css:C.muted,align:"center"},opt||{});items.push(q);return q},
+    quad(pts,col,al){items.push({t:"quad",st:i,pts:pts.map(p=>[ox+p[0],p[1],oz+p[2]]),css:col,al})},
+    sph(x,y,z,r,col){items.push({t:"sph",st:i,c:[ox+x,y,oz+z],r,col:hex(col)})},
+    pt(x,y,z,r,col){items.push({t:"pt",st:i,c:[ox+x,y,oz+z],r,css:col})}
+  };
+  return o;
+}
+
+/* ground: path, platforms, signs */
+const PATH=[];(function(){
+  for(let x=-10;x<=110;x+=4)PATH.push([x,-15]);
+  for(let a=-80;a<=80;a+=10){const r=a*Math.PI/180;PATH.push([110+15*Math.cos(r),15*Math.sin(r)])}
+  for(let x=110;x>=2;x-=4)PATH.push([x,15]);
+  for(let k=0;k<PATH.length-1;k++){
+    const split=k>=31+8; // roughly where the pipeline hands over to analysis
+    items.push({t:"ln",L:0,a:[PATH[k][0],-.2,PATH[k][1]],b:[PATH[k+1][0],-.2,PATH[k+1][1]],css:split?C.ana:C.pipe,ww:.55,al:.5});
+  }
+})();
+const flow=[];for(let k=0;k<26;k++){const p={t:"pt",L:0,c:[0,0,0],r:.32,css:"#dff7f3",u:k/26};flow.push(p);items.push(p)}
+function pathAt(u){const f=u*(PATH.length-1),k=Math.min(PATH.length-2,f|0),t=f-k;
+  return[PATH[k][0]+(PATH[k+1][0]-PATH[k][0])*t,PATH[k][1]+(PATH[k+1][1]-PATH[k][1])*t]}
+
+POS.forEach((p,i)=>{
+  const ana=i>=6,base=hex(ana?C.platA:C.plat),rim=hex(ana?C.ana:C.pipe),N=30,Rr=8.6,top=[];
+  for(let k=0;k<N;k++){const a=k/N*6.2832,b=(k+1)/N*6.2832;
+    const x1=p[0]+Rr*Math.cos(a),z1=p[1]+Rr*Math.sin(a),x2=p[0]+Rr*Math.cos(b),z2=p[1]+Rr*Math.sin(b);
+    top.push([x1,0,z1]);
+    items.push({t:"quad",L:0,pts:[[x1,0,z1],[x2,0,z2],[x2,-.7,z2],[x1,-.7,z1]],css:css(mix(base,rim,.55),.5+.4*Math.abs(Math.sin(a))),al:1});
+  }
+  items.push({t:"quad",L:0,pts:top,css:css(base,1),al:1,edge:css(rim,.9)});
+  items.push({t:"txt",sign:true,st:i,c:[p[0],10.2,p[1]],s:(i+1)+"  "+STEPS[i+1].short,px:13,css:ana?C.ana:C.pipe,align:"center",bold:true});
+});
+
+/* 1 · FASTQ stacks */
+(function(){const s=station(0);
+  for(let smp=0;smp<9;smp++){const g=GROUP(smp),x=(g-1)*4.6,z=((smp%3)-1)*3.6;
+    for(let k=0;k<13;k++)s.box(x+(R()-.5)*.7,.05+k*.27,z+(R()-.5)*.3,3.1,.17,.55,C.g[g]);}
+  s.text(-4.6,4.6,-3.6,"Asthma + RV");s.text(0,4.6,-3.6,"Control + RV");s.text(4.6,4.6,-3.6,"Control + vehicle");
+  s.text(0,.3,6.6,"one stack = one sample's reads");
+})();
+
+/* 2 · per-base quality */
+(function(){const s=station(1),n=36;
+  for(let i=0;i<n;i++){const q=clamp(38-.0165*i*i+(R()-.5)*1.2,2,40),x=-6.3+i*.36;
+    s.box(x,0,0,.27,q*.165,1.3,q>=28?C.ok:q>=20?C.warn:C.bad);}
+  [[28,C.ok],[20,C.warn]].forEach(([q,c])=>{for(let k=0;k<14;k++)s.line([-6.6+k*.95,q*.165,-.9],[-6.6+k*.95+.55,q*.165,-.9],c,1.2,.8);
+    s.text(7.3,q*.165,-.9,"Q"+q,{css:c,align:"left"});});
+  s.text(-6.3,-.1,1.8,"5′ start",{align:"center"});s.text(6.3,-.1,1.8,"3′ end");s.text(0,7.3,0,"mean base quality along the read");
+})();
+
+/* 3 · trimming */
+(function(){const s=station(2),ads=[];
+  for(let k=0;k<9;k++){const z=-4.4+k*1.1,L=6+R()*3,al=1.2+R()*1.6,x0=-5.6;
+    s.box(x0+L/2,.5,z,L,.3,.6,C.pipe);
+    const a=s.box(x0+L+al/2+.05,.5,z,al,.3,.6,C.bad);a.bx=a.c[0];a.del=k*.12;ads.push(a);}
+  s.text(-2,2.2,-4.4,"read");const lab=s.text(4.6,2.2,-4.4,"adapter",{css:C.bad});
+  anim.push(t=>{ads.forEach(a=>{let p=reduce?.45:((t*.22-a.del)%1+1)%1;const q=ease(clamp((p-.3)/.4,0,1));
+    a.c[0]=a.bx+q*3.2;a.c[1]=.65-q*.45+ (q>0&&q<1?Math.sin(q*3.14)*1.2:0);a.a=1-q*.8;});});
+})();
+
+/* 4 · alignment */
+(function(){const s=station(3),ex=[[-5.2,2.2],[-1.6,1.7],[2.1,2.5],[5.6,1.8]],reads=[];
+  for(let k=0;k<15;k++)s.box(-7+k+.5,0,0,1.02,.22,1.5,C.dark);
+  ex.forEach(e=>s.box(e[0],.22,0,e[1],.5,1.5,C.pipe));
+  function read(parts,arc){const y0=parts[0].y,del=R()*4.6;const bs=parts.map(p=>{const b=s.box(p.x,p.y,p.z,p.w,.15,.42,arc?C.warn:"#d3dceb");b.fy=b.c[1];return b});
+    let ls=[];if(arc){const a=parts[0],b=parts[1],x1=a.x+a.w/2,x2=b.x-b.w/2,n=7;
+      for(let i=0;i<n;i++){const u=i/n,v=(i+1)/n,f=u=>[x1+(x2-x1)*u,y0+.08+Math.sin(u*3.1416)*.9,a.z];
+        const l=s.line(f(u),f(v),C.warn,1.4,.9);l.fa=l.a[1];l.fb=l.b[1];ls.push(l);}}
+    reads.push({bs,ls,del});}
+  ex.forEach((e,j)=>{const n=[9,5,12,7][j];for(let k=0;k<n;k++){const lvl=k%6,row=(k/6|0);
+    read([{x:e[0]+(R()-.5)*(e[1]-1.05),y:.85+lvl*.24,z:-.42+row*.5+(R()-.5)*.05,w:1.05}]);}});
+  [[0,1,2],[1,2,3],[2,3,2]].forEach(([a,b,n])=>{for(let k=0;k<n;k++){const y=2.5+k*.3+a*.1;
+    read([{x:ex[a][0]+ex[a][1]/2-.3,y,z:.1,w:.6},{x:ex[b][0]-ex[b][1]/2+.3,y,z:.1,w:.6}],true);}});
+  s.text(-5.2,-.2,1.9,"exon");s.text(-3.4,-.2,1.9,"intron");s.text(0,5.4,0,"spliced reads bridge introns",{css:C.warn});
+  anim.push(t=>{const tt=reduce?99:t%10;reads.forEach(r=>{const d=9*(1-ease(clamp((tt-r.del)/.9,0,1)));
+    r.bs.forEach(b=>{b.c[1]=b.fy+d;b.a=d>8.9?0:1});r.ls.forEach(l=>{l.a[1]=l.fa+d;l.b[1]=l.fb+d;l.al=d>8.9?0:.9});});});
+})();
+
+/* 5 and 7 · count grid (raw, then normalized) */
+const SF=[1.5,.7,1.1,.55,1.25,.9,1.7,.8,1.05];
+const GRID=(function(){const g=[];for(let j=0;j<12;j++){const base=300+R()*1000,row=[];
+  for(let sidx=0;sidx<9;sidx++){let e=1;const grp=GROUP(sidx);
+    if(j===2&&grp<2)e=2.2;if(j===7&&grp===0)e=1.9;if(j===10&&grp<2)e=.4;
+    row.push(base*e*(1+(R()-.5)*.14));}g.push(row);}return g})();
+function grid(idx,live){const s=station(idx),bars=[];
+  for(let j=0;j<12;j++)for(let k=0;k<9;k++){const n=GRID[j][k],raw=n*SF[k];
+    const b=s.box(-4.6+k*1.15,0,-4.6+j*.84,.82,1,.56,C.g[GROUP(k)]);b.hr=raw/4000*6;b.hn=n/4000*6;
+    b.s[1]=b.hr;b.c[1]=b.hr/2;bars.push(b);}
+  s.text(0,-.1,6.3,"samples →");s.text(-6.6,.2,0,"genes →");
+  if(live){const lab=s.text(0,8.4,0,"raw counts",{css:C.text});
+    anim.push(()=>{normMix+=(normGoal-normMix)*(reduce?1:.07);bars.forEach(b=>{const h=b.hr+(b.hn-b.hr)*normMix;b.s[1]=h;b.c[1]=h/2});
+      lab.s=normMix>.5?"normalized counts":"raw counts";});}
+}
+grid(4,false);
+
+/* 6 · QC report */
+(function(){const s=station(5);
+  for(let k=0;k<9;k++){const out=k===5,u=out?.56:.86+R()*.05,m=out?.09:.05+R()*.02,H=6.4,x=-5.2+k*1.3;
+    s.box(x,0,0,.9,u*H,.9,C.g[GROUP(k)]);s.box(x,u*H,0,.9,m*H,.9,C.grey);s.box(x,(u+m)*H,0,.9,(1-u-m)*H,.9,C.dark);
+    if(out){for(let i=0;i<24;i++){const a=i/24*6.2832,b=(i+1)/24*6.2832;
+      s.line([x+1.05*Math.cos(a),.12,1.05*Math.sin(a)],[x+1.05*Math.cos(b),.12,1.05*Math.sin(b)],C.warn,2,1);}
+      s.text(x,7.2,0,"low mapping rate",{css:C.warn});}}
+  s.text(-6.6,6.4,0,"100%",{align:"right"});s.text(-6.6,.1,0,"0%",{align:"right"});
+  s.text(0,-.1,1.9,"share of reads: mapped, multi-mapped, unmapped");
+})();
+
+grid(6,true);
+
+/* 8 · PCA */
+(function(){const s=station(7),O=[-6,.25,-4];
+  s.line(O,[6.4,.25,-4],C.muted,1.2);s.line(O,[-6,7.4,-4],C.muted,1.2);s.line(O,[-6,.25,4.6],C.muted,1.2);
+  for(let k=1;k<6;k++){s.line([-6+k*2.07,.25,-4],[-6+k*2.07,.25,4.6],C.muted,.6,.22);s.line([-6,.25,-4+k*1.43],[6.4,.25,-4+k*1.43],C.muted,.6,.22);}
+  s.text(7.2,.3,-4,"PC1 · 58%",{align:"left",css:C.text});s.text(-6,8,-4,"PC2 · 21%",{css:C.text});s.text(-6,.3,5.5,"PC3 · 7%",{css:C.text});
+  const cen=[[3.9,5.6],[2.9,2.3],[-4.3,3.3]];
+  for(let k=0;k<9;k++){const g=GROUP(k),x=cen[g][0]+gauss()*.55,y=cen[g][1]+gauss()*.4,z=gauss()*1.9;
+    s.line([x,.25,z],[x,y,z],C.g[g],1,.45);s.pt(x,.26,z,.28,"rgba(0,0,0,.45)");s.sph(x,y,z,.46,C.g[g]);}
+})();
+
+/* 9 · 3D volcano / MA cloud */
+(function(){const s=station(8),n=720,g=[];
+  const Phi=z=>{const t=1/(1+.3275911*z/1.4142),e=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-.284496736)*t+.254829592)*t*Math.exp(-z*z/2);return .5*(1+e)};
+  for(let i=0;i<n;i++){const lm=.7+R()*3.8,m=Math.pow(10,lm),se=.16+2.4/Math.sqrt(m);
+    const tr=R()<.24?gauss()*1.9:0,l=tr+gauss()*se,p=Math.max(2*(1-Phi(Math.abs(l/se))),1e-300);g.push({lm,l,p});}
+  const ord=g.map((_,i)=>i).sort((a,b)=>g[a].p-g[b].p);let run=1;
+  for(let r=n-1;r>=0;r--){const q=g[ord[r]];run=Math.min(run,q.p*n/(r+1));q.q=run;}
+  const X=l=>clamp(l,-6,6),Y=q=>.2+Math.min(-Math.log10(q),24)*.3,Z=lm=>-4.4+(lm-.7)/3.8*8.8;
+  g.forEach(q=>{const sig=q.q<.05&&Math.abs(q.l)>=1;s.pt(X(q.l),Y(q.q),Z(q.lm),sig?.13:.1,sig?(q.l>0?C.up:C.down):C.ns);});
+  s.line([-6.4,.2,-4.6],[6.4,.2,-4.6],C.muted,1.2);s.line([-6.4,.2,-4.6],[-6.4,7.6,-4.6],C.muted,1.2);s.line([-6.4,.2,-4.6],[-6.4,.2,4.8],C.muted,1.2);
+  s.line([0,.2,-4.6],[0,.2,4.8],C.muted,.8,.4);
+  [-1,1].forEach(x=>s.quad([[x,.2,-4.6],[x,7.4,-4.6],[x,7.4,4.6],[x,.2,4.6]],"#ffffff",.05));
+  s.text(0,-.25,5.6,"← down     log2 fold change     up →",{css:C.text});
+  s.text(-6.4,8.1,-4.6,"−log10 adjusted p",{css:C.text});
+  s.text(-7,.2,0,"mean expression",{css:C.text,align:"right"});
+  s.text(-6.9,.2,-4.4,"low",{align:"right"});s.text(-6.9,.2,4.6,"high",{align:"right"});
+})();
+
+/* 10 · heatmap */
+(function(){const s=station(9);
+  const names=["IFIT1","IFIT2","MX1","OAS1","ISG15","CXCL10","RSAD2","IFI44L","Gene A","Gene B","Gene C","Gene D","Gene E","Gene F"];
+  const lo=hex("#3f7fe0"),mid=hex("#2b3653"),hi=hex("#f0625a");
+  names.forEach((nm,j)=>{const z0=-4.8+j*.74;
+    for(let k=0;k<9;k++){const g=GROUP(k);let z;
+      if(j<8)z=[1.15,.7,-1.4][g];else if(j<11)z=[1.4,-.6,-.75][g];else z=[-.8,-.75,1.5][g];
+      z=clamp(z+gauss()*.22,-1.9,1.9);const c=z>0?mix(mid,hi,z/1.9):mix(mid,lo,-z/1.9);
+      s.box(-4.1+k*1.12,0,z0,1.02,.2+Math.abs(z)*.75,.64,"#"+c.map(v=>(v|0).toString(16).padStart(2,"0")).join(""));}
+    s.text(-5.1,.3,z0,nm,{align:"right",px:11,css:j<8?C.text:C.muted});});
+  for(let k=0;k<9;k++)s.box(-4.1+k*1.12,0,-5.75,1.02,.3,.4,C.g[GROUP(k)]);
+  s.text(0,-.1,6.4,"samples →");
+})();
+
+/* --------------------------------------------------------------- camera */
+const cv=document.getElementById("cv"),ctx=cv.getContext("2d");
+let W=1,H=1,DPR=1,cur=0,sway=true,tSway=0;
+const cam={th:0,ph:.95,r:120,tg:[62,0,0]},goal={th:0,ph:.95,r:120,tg:[62,0,0]};
+const V={p:[0,0,0],r:[1,0,0],u:[0,1,0],f:[0,0,-1],F:1};
+const VIEW={7:{th:.55,ph:1.12},8:{th:.5,ph:1.12},9:{th:.45,ph:1.2},10:{th:.18,ph:.78},2:{th:.25,ph:1.2},4:{th:.3,ph:1.15},6:{th:.3,ph:1.15}};
+function frameFor(i){const asp=W/H,tan=.4142;
+  if(i===0)return{th:0,ph:.9,r:Math.max(105,74/(tan*asp)),tg:[60,0,2]};
+  const p=POS[i-1],v=VIEW[i]||{th:.45,ph:1.08};
+  return{th:v.th,ph:v.ph,r:Math.max(23,10.5/(tan*asp)),tg:[p[0],3,p[1]]};}
+function go(i,keep){cur=clamp(i,0,STEPS.length-1);Object.assign(goal,frameFor(cur));sway=true;tSway=0;
+  if(!keep)normGoal=0;renderPanel();}
+function resize(){const b=cv.getBoundingClientRect();DPR=Math.min(devicePixelRatio||1,2);W=Math.max(1,b.width);H=Math.max(1,b.height);
+  cv.width=W*DPR|0;cv.height=H*DPR|0;const f=frameFor(cur);goal.r=f.r;}
+new ResizeObserver(resize).observe(cv);
+
+/* pointer: rotate, pinch, click */
+const ptrs=new Map();let moved=0,pinch=0;
+cv.addEventListener("pointerdown",e=>{cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,[e.clientX,e.clientY]);moved=0;cv.classList.add("drag");
+  if(ptrs.size===2){const a=[...ptrs.values()];pinch=Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]);}});
+cv.addEventListener("pointermove",e=>{const p=ptrs.get(e.pointerId);if(!p)return;const dx=e.clientX-p[0],dy=e.clientY-p[1];
+  ptrs.set(e.pointerId,[e.clientX,e.clientY]);moved+=Math.abs(dx)+Math.abs(dy);
+  if(ptrs.size===1){if(moved>4)sway=false;goal.th-=dx*.0065;goal.ph=clamp(goal.ph-dy*.0055,.06,1.5);}
+  else if(ptrs.size===2){const a=[...ptrs.values()],d=Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]);
+    if(pinch)goal.r=clamp(goal.r*pinch/d,9,320);pinch=d;sway=false;}});
+function up(e){if(!ptrs.has(e.pointerId))return;ptrs.delete(e.pointerId);cv.classList.remove("drag");pinch=0;
+  if(moved<5&&e.type==="pointerup"){const b=cv.getBoundingClientRect(),x=e.clientX-b.left,y=e.clientY-b.top;let best=-1,bd=1e9;
+    POS.forEach((p,i)=>{const q=project(p[0],1.5,p[1]);if(!q)return;const rad=9*V.F/q[2],d=Math.hypot(q[0]-x,q[1]-y);
+      if(d<Math.max(rad,26)&&d<bd){bd=d;best=i}});
+    if(best>=0&&best+1!==cur)go(best+1);}}
+cv.addEventListener("pointerup",up);cv.addEventListener("pointercancel",up);
+cv.addEventListener("wheel",e=>{e.preventDefault();goal.r=clamp(goal.r*Math.exp(e.deltaY*.0012),9,320);sway=false;},{passive:false});
+
+function project(x,y,z){const dx=x-V.p[0],dy=y-V.p[1],dz=z-V.p[2],zz=dx*V.f[0]+dy*V.f[1]+dz*V.f[2];if(zz<.6)return null;
+  const k=V.F/zz;return[W/2+(dx*V.r[0]+dy*V.r[1]+dz*V.r[2])*k,H/2-(dx*V.u[0]+dy*V.u[1]+dz*V.u[2])*k,zz];}
+
+/* --------------------------------------------------------------- render */
+const CORN=[[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]];
+const FACES={px:[1,2,6,5],nx:[0,4,7,3],py:[3,7,6,2],ny:[0,1,5,4],pz:[4,5,6,7],nz:[0,3,2,1]};
+function poly(P,idx){ctx.beginPath();ctx.moveTo(P[idx[0]][0],P[idx[0]][1]);for(let i=1;i<idx.length;i++)ctx.lineTo(P[idx[i]][0],P[idx[i]][1]);ctx.closePath();ctx.fill();ctx.stroke();}
+let last=0;
+function frame(ts){const t=ts/1000,dt=Math.min(.05,t-last);last=t;
+  /* camera easing */
+  if(sway&&!reduce&&cur>0){tSway+=dt;}
+  const swayTh=(cur>0&&!reduce)?Math.sin(tSway*.35)*.28:0,k=reduce?1:.085;
+  cam.th+=(goal.th+swayTh-cam.th)*k;cam.ph+=(goal.ph-cam.ph)*k;cam.r+=(goal.r-cam.r)*k;
+  for(let i=0;i<3;i++)cam.tg[i]+=(goal.tg[i]-cam.tg[i])*k;
+  const sp=Math.sin(cam.ph),cp=Math.cos(cam.ph);
+  V.p=[cam.tg[0]+cam.r*sp*Math.sin(cam.th),cam.tg[1]+cam.r*cp,cam.tg[2]+cam.r*sp*Math.cos(cam.th)];
+  let f=[cam.tg[0]-V.p[0],cam.tg[1]-V.p[1],cam.tg[2]-V.p[2]];const fl=Math.hypot(...f);f=f.map(v=>v/fl);
+  let r=[-f[2],0,f[0]];const rl=Math.hypot(...r)||1;r=r.map(v=>v/rl);
+  V.f=f;V.r=r;V.u=[r[1]*f[2]-r[2]*f[1],r[2]*f[0]-r[0]*f[2],r[0]*f[1]-r[1]*f[0]];V.F=(H/2)/.4142;
+  /* animation */
+  for(const a of anim)a(t);
+  flow.forEach(p=>{const u=reduce?p.u:(p.u+t*.012)%1,q=pathAt(u);p.c[0]=q[0];p.c[1]=.05;p.c[2]=q[1];});
+  /* build draw list */
+  const dl=[];
+  for(const it of items){
+    if(cur>0&&it.st!=null&&it.st!==cur-1){const sp=POS[it.st];if(Math.hypot(sp[0]-cam.tg[0],sp[1]-cam.tg[2])>(it.sign?40:29))continue;}
+    if(it.t==="box"){if(it.a<=.01)continue;const q=project(it.c[0],it.c[1],it.c[2]);if(!q)continue;dl.push([1,q[2],it]);}
+    else if(it.t==="ln"){const a=project(it.a[0],it.a[1],it.a[2]),b=project(it.b[0],it.b[1],it.b[2]);if(!a||!b||it.al<=.01)continue;dl.push([it.L===0?0:1,(a[2]+b[2])/2,it,a,b]);}
+    else if(it.t==="quad"){const P=[];let z=0,ok=true;for(const p of it.pts){const q=project(p[0],p[1],p[2]);if(!q){ok=false;break}P.push(q);z+=q[2]}
+      if(ok)dl.push([it.L===0?0:1,z/P.length,it,P]);}
+    else if(it.t==="txt"){if(it.sign?(cur===it.st+1):(cur!==it.st+1))continue;const q=project(it.c[0],it.c[1],it.c[2]);if(q)dl.push([2,q[2],it,q]);}
+    else{const q=project(it.c[0],it.c[1],it.c[2]);if(q)dl.push([it.L===0?0:1,q[2],it,q]);}
+  }
+  dl.sort((a,b)=>a[0]-b[0]||b[1]-a[1]);
+  /* paint */
+  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle=C.ink;ctx.fillRect(0,0,W,H);
+  ctx.lineJoin="round";ctx.lineCap="round";
+  const P=new Array(8);
+  for(const d of dl){const it=d[2];
+    if(it.t==="box"){const c=it.c,s=it.s;let ok=true;
+      for(let i=0;i<8;i++){const q=project(c[0]+CORN[i][0]*s[0]/2,c[1]+CORN[i][1]*s[1]/2,c[2]+CORN[i][2]*s[2]/2);if(!q){ok=false;break}P[i]=q}
+      if(!ok)continue;ctx.globalAlpha=it.a;ctx.lineWidth=.6;
+      if(V.p[0]>c[0]+s[0]/2){ctx.fillStyle=ctx.strokeStyle=it.col[1];poly(P,FACES.px)}else if(V.p[0]<c[0]-s[0]/2){ctx.fillStyle=ctx.strokeStyle=it.col[1];poly(P,FACES.nx)}
+      if(V.p[2]>c[2]+s[2]/2){ctx.fillStyle=ctx.strokeStyle=it.col[2];poly(P,FACES.pz)}else if(V.p[2]<c[2]-s[2]/2){ctx.fillStyle=ctx.strokeStyle=it.col[2];poly(P,FACES.nz)}
+      if(V.p[1]>c[1]+s[1]/2){ctx.fillStyle=ctx.strokeStyle=it.col[0];poly(P,FACES.py)}
+    }else if(it.t==="ln"){ctx.globalAlpha=it.al==null?1:it.al;ctx.strokeStyle=it.css;ctx.lineWidth=it.ww?Math.max(1,it.ww*V.F/d[1]):it.w;
+      ctx.beginPath();ctx.moveTo(d[3][0],d[3][1]);ctx.lineTo(d[4][0],d[4][1]);ctx.stroke();
+    }else if(it.t==="quad"){const Q=d[3];ctx.globalAlpha=it.al;ctx.fillStyle=it.css;ctx.strokeStyle=it.edge||it.css;ctx.lineWidth=it.edge?1.4:.6;
+      ctx.beginPath();ctx.moveTo(Q[0][0],Q[0][1]);for(let i=1;i<Q.length;i++)ctx.lineTo(Q[i][0],Q[i][1]);ctx.closePath();ctx.fill();if(it.al>.5)ctx.stroke();
+    }else if(it.t==="pt"){const q=d[3],rad=Math.max(1.1,it.r*V.F/q[2]);ctx.globalAlpha=it.L===0?.8:.95;ctx.fillStyle=it.css;ctx.beginPath();ctx.arc(q[0],q[1],rad,0,6.2832);ctx.fill();
+    }else if(it.t==="sph"){const q=d[3],rad=it.r*V.F/q[2];ctx.globalAlpha=1;
+      const gr=ctx.createRadialGradient(q[0]-rad*.35,q[1]-rad*.4,rad*.1,q[0],q[1],rad);gr.addColorStop(0,css(mix(it.col,[255,255,255],.45),1));gr.addColorStop(1,css(it.col,.62));
+      ctx.fillStyle=gr;ctx.beginPath();ctx.arc(q[0],q[1],rad,0,6.2832);ctx.fill();
+    }else{const q=d[3];ctx.globalAlpha=1;ctx.font=`${it.bold?600:500} ${it.px}px "IBM Plex Sans",system-ui,sans-serif`;ctx.textAlign=it.align;ctx.textBaseline="middle";
+      ctx.lineWidth=3.5;ctx.strokeStyle=C.ink;ctx.strokeText(it.s,q[0],q[1]);ctx.fillStyle=it.css;ctx.fillText(it.s,q[0],q[1]);}
+  }
+  ctx.globalAlpha=1;
+  requestAnimationFrame(frame);
+}
+
+/* ---------------------------------------------------------------- panel */
+const body=document.getElementById("body"),prev=document.getElementById("prev"),next=document.getElementById("next");
+STEPS.forEach((s,i)=>{const b=document.createElement("button");b.type="button";b.className="chip "+s.k;b.textContent=i===0?"Map":i;
+  b.title=s.name;b.setAttribute("aria-label",(i?"Station "+i+": ":"")+s.name);b.onclick=()=>go(i);
+  document.getElementById(s.k==="a"?"rail-a":"rail-p").appendChild(b);s.chip=b;});
+function renderPanel(){const s=STEPS[cur];
+  body.innerHTML=`<p class="eyebrow ${s.k==="a"?"a":"p"}">${s.eyebrow}</p><h1>${s.name}</h1>${s.html}`;body.scrollTop=0;
+  STEPS.forEach((q,i)=>q.chip.setAttribute("aria-current",i===cur?"true":"false"));
+  prev.disabled=cur===0;next.disabled=cur===STEPS.length-1;
+  next.textContent=cur===0?"Start at station 1":cur===STEPS.length-1?"End of the route":"Next: "+STEPS[cur+1].short;}
+prev.onclick=()=>go(cur-1);next.onclick=()=>go(cur+1);
+body.addEventListener("click",e=>{const b=e.target.closest("button[data-act]");if(!b)return;const a=b.dataset.act;
+  if(a==="norm0"||a==="norm1"){normGoal=a==="norm1"?1:0;body.querySelectorAll('[data-act^="norm"]').forEach(x=>x.setAttribute("aria-pressed",x===b?"true":"false"));}
+  if(a==="volcano"){sway=false;goal.th=0;goal.ph=1.5;goal.tg=[POS[8][0],4,POS[8][1]];}
+  if(a==="ma"){sway=false;goal.th=-Math.PI/2;goal.ph=.07;goal.tg=[POS[8][0],2,POS[8][1]];}});
+addEventListener("keydown",e=>{if(e.target.closest&&e.target.closest("pre"))return;
+  if(e.key==="ArrowRight")go(cur+1);else if(e.key==="ArrowLeft")go(cur-1);});
+
+if("serviceWorker" in navigator&&location.protocol==="https:"||location.hostname==="localhost"){navigator.serviceWorker.register("sw.js").catch(()=>{});}
+resize();Object.assign(cam,frameFor(0));cam.tg=cam.tg.slice();go(0);
+const start=()=>requestAnimationFrame(frame);
+(document.fonts&&document.fonts.ready?Promise.race([document.fonts.ready,new Promise(r=>setTimeout(r,900))]):Promise.resolve()).then(start,start);
+</script>
+</body>
+</html>
